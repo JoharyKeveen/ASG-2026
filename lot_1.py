@@ -9,7 +9,7 @@ app = Flask(__name__)
 FASTQ_FILE = "input/1_control_psbA3_2019_minq7.fastq"
 
 K = 5
-seuil_de_qualite = 20
+seuil_erreur = 0.10
 
 def read_fastq(filepath):
     reads = []
@@ -41,13 +41,21 @@ def average_quality(quality_string):
     return sum(scores) / len(scores)
 
 
-def filter_reads(reads, seuil_de_qualite):
+def filter_reads(reads, seuil_erreur):
     filtered = []
     for read in reads:
-        avg_q = average_quality(read["quality"])
-        if avg_q >= seuil_de_qualite:
+        error = average_error_rate(read["quality"])
+        if error <= seuil_erreur:
             filtered.append(read)
     return filtered
+
+def average_error_rate(quality_string):
+    probs = []
+    for c in quality_string:
+        q = phred_score(c)
+        p = 10 ** (-q / 10)
+        probs.append(p)
+    return sum(probs) / len(probs)
 
 
 def export_fasta(reads, output_file):
@@ -78,44 +86,42 @@ def count_kmer_frequencies(all_kmers):
 
 
 def plot_histogram(frequencies):
-
     values = list(frequencies.values())
-
     plt.figure(figsize=(10,5))
-
     plt.hist(values, bins=30)
-
     plt.xlabel("Fréquence des k-mers")
     plt.ylabel("Nombre de k-mers")
-
     plt.title("Histogramme des fréquences des k-mers")
-
     plt.savefig("static/histogram.png")
-
     plt.close()
 
 
 @app.route("/")
 def index():
-
     reads = read_fastq(FASTQ_FILE)
-
-    filtered_reads = filter_reads(reads, seuil_de_qualite)
-
+    filtered_reads = filter_reads(reads, seuil_erreur)
     export_fasta(filtered_reads,"output/filtered_reads.fasta")
-
     all_kmers = kmers(filtered_reads, K)
-
     kmer_frequencies = count_kmer_frequencies(all_kmers)
-
     plot_histogram(kmer_frequencies)
+
+    total_error = 0
+    for read in filtered_reads:
+        error = average_error_rate(read["quality"])
+        total_error += error
+
+    if len(filtered_reads) > 0:
+        average_error = (total_error / len(filtered_reads)) * 100
+    else:
+        average_error = 0
 
     return render_template(
         "index.html",
         total_reads=len(reads),
         filtered_reads=len(filtered_reads),
         total_kmers=len(all_kmers),
-        unique_kmers=len(kmer_frequencies)
+        unique_kmers=len(kmer_frequencies),
+        average_error=average_error
     )
 
 

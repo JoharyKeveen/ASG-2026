@@ -38,7 +38,20 @@ def phred_score(char):
 
 def average_quality(quality_string):
     scores = [phred_score(c) for c in quality_string]
+    if len(scores) == 0:
+        return 0
     return sum(scores) / len(scores)
+
+
+def average_error_rate(quality_string):
+    probs = []
+    for c in quality_string:
+        q = phred_score(c)
+        p = 10 ** (-q / 10)
+        probs.append(p)
+    if len(probs) == 0:
+        return 0
+    return sum(probs) / len(probs)
 
 
 def filter_reads(reads, seuil_erreur):
@@ -48,14 +61,6 @@ def filter_reads(reads, seuil_erreur):
         if error <= seuil_erreur:
             filtered.append(read)
     return filtered
-
-def average_error_rate(quality_string):
-    probs = []
-    for c in quality_string:
-        q = phred_score(c)
-        p = 10 ** (-q / 10)
-        probs.append(p)
-    return sum(probs) / len(probs)
 
 
 def export_fasta(reads, output_file):
